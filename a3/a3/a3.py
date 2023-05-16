@@ -7,6 +7,33 @@ from constants import *
 
 
 # Implement your classes here
+class ItemView(tk.Frame):
+
+    def __init__(self, master: tk.Frame, item_name: str, amount: int,
+                 select_command: Optional[Callable[[str], None]] = None,
+                 sell_command: Optional[Callable[[str], None]] = None,
+                 buy_command: Optional[Callable[[str], None]] = None) -> None:
+        super().__init__(master)
+        # self.pack(side=tk.BOTTOM)
+        canvas = tk.Canvas(master, width=INVENTORY_WIDTH, height=FARM_WIDTH // 6, bg=INVENTORY_COLOUR, borderwidth=2)
+        canvas.pack(fill=tk.BOTH)
+        # INVENTORY_COLOUR = '#fdc074'
+        # INVENTORY_OUTLINE_COLOUR = '#d68f54'
+        # INVENTORY_SELECTED_COLOUR = '#d68f54'
+        # INVENTORY_EMPTY_COLOUR = 'grey'
+        bg_color = INVENTORY_EMPTY_COLOUR if amount == 0 else INVENTORY_COLOUR
+        amount = tk.Label(canvas, text=item_name + " :" + str(amount), bg=bg_color)
+        sell_price = tk.Label(canvas, text="Sell price : $" + str(SELL_PRICES[item_name]), bg=bg_color)
+        buy_price = tk.Label(canvas, text="Buy price : $" + str(BUY_PRICES.get(item_name, 'N/A')), bg=bg_color)
+        amount.pack(fill=tk.BOTH)
+        sell_price.pack(fill=tk.BOTH)
+        buy_price.pack(fill=tk.BOTH)
+    pass
+
+    def update(self, amount: int, selected: bool = False) -> None:
+        pass
+
+
 class InfoBar(AbstractGrid):
     day = 0
     money = 0
@@ -29,27 +56,30 @@ class InfoBar(AbstractGrid):
 class FarmView(AbstractGrid):
 
     def __init__(self, master: tk.Tk | tk.Frame, dimensions: tuple[int, int], size: tuple[int, int], **kwargs) -> None:
-        super().__init__(master, dimensions, size)
+        super().__init__(master, dimensions, size, **kwargs)
 
     def redraw(self, ground: list[str], plants: dict[tuple[int, int], Plant], player_position: tuple[int, int],
                player_direction: str) -> None:
-        # 加载每张图像并存储到字典中
-        # 定义每个图像大小
+        # 定义每个图像大小22
         image_width = 50
         image_height = 50
         images = {}
+        relation = {}
         for c in set([item for line in ground for item in line]):
-            image_file = ''
-            if c == GRASS:
-                image_file = 'images/grass.png'
-            elif c == SOIL:
-                image_file = 'images/soil.png'
-            elif c == UNTILLED:
-                image_file = 'images/untilled_soil.png'
+            image_file = 'images/' + IMAGES[c]
             get_image(image_file, (image_width, image_height), images)
-            self.create_image(image_width, image_height, anchor='nw', image=images[image_file])
+            relation[c] = image_file
+        i = 0
+        for line in ground:
+            for j, c in enumerate(line):
+                self.create_image(j * image_width, i * image_height, anchor='nw', image=images[relation[c]])
+            i += 1
+        # 加载角色图像，并设置初始位置
+        image_d = Image.open('images/player_d.png')
+        image_d = image_d.resize((image_width, image_height), Image.LANCZOS)
+        play_img = ImageTk.PhotoImage(image_d)
+        self.create_image(0, self._size[1] // 2, anchor='nw', image=play_img)
         self.pack()
-        pass
 
 
 def play_game(root: tk.Tk, map_file: str) -> None:
@@ -60,36 +90,60 @@ def main() -> None:
     pass
 
 
+def turn_new_day(farm_model: FarmModel) -> None:
+    return farm_model.new_day()
+
+
 if __name__ == '__main__':
     main()
     # 创建画布并展示图像
-    farm_model = FarmModel('maps/map2.txt')
-    # print(farm_model.get_dimensions())
-    # print(farm_model.get_map())
-
+    farm_model = FarmModel('maps/map1.txt')
     root = tk.Tk()
-    root.geometry("700x700")
+    button_frame = tk.Frame(root)
+    button_frame.pack(side=tk.BOTTOM)
+    button = tk.Button(button_frame, text='Next day', command=lambda: turn_new_day(farm_model))
+    button.pack()
+
     info_frame = tk.Frame(root)
     info_frame.pack(side=tk.BOTTOM)
-    farm_frame = tk.Frame(root)
-    farm_frame.pack(side=tk.BOTTOM)
-    #
-    # # 创建四个Canvas
-    # canvas1 = tk.Canvas(frame)
-    # image_banner = Image.open('images/header.png')
-    # img_banner = ImageTk.PhotoImage(image_banner)
-    # banner_id = canvas1.create_image(0, 0, image=img_banner)
-    # # canvas1.grid(row=0, column=0)
-    # canvas1.pack(side=tk.TOP)
-    farm_view = FarmView(farm_frame, farm_model.get_dimensions(), (FARM_WIDTH, FARM_WIDTH))
-    farm_view.redraw(farm_model.get_map(), None, (0, 0), DOWN)
-    farm_view.pack(side=tk.BOTTOM)
     info_bar = InfoBar(info_frame)
-    # info_bar.create_text(100, 45, text="Day:\n\n" + str(info_bar.day), font=HEADING_FONT)
-    # info_bar.create_text(200, 45, text="Money:\n\n$" + str(info_bar.money), font=HEADING_FONT)
-    # info_bar.create_text(300, 45, text="Energy:\n\n" + str(info_bar.energy), font=HEADING_FONT)
-    # # info_bar.grid(row=2, column=0)
-    # info_bar.pack(side=tk.BOTTOM)
+
+    farm_frame = tk.Frame(root, width=FARM_WIDTH, height=FARM_WIDTH, bg='blue')
+    farm_view = FarmView(farm_frame, farm_model.get_dimensions(), (FARM_WIDTH, FARM_WIDTH))
+    # farm_view.redraw(farm_model.get_map(), farm_model.get_plants(), (0, 0), DOWN)
+    # 定义每个图像大小22
+    image_width = 50
+    image_height = 50
+    ground = farm_model.get_map()
+    images = {}
+    relation = {}
+    for c in set([item for line in ground for item in line]):
+        image_file = 'images/' + IMAGES[c]
+        get_image(image_file, (image_width, image_height), images)
+        relation[c] = image_file
+    i = 0
+    for line in ground:
+        for j, c in enumerate(line):
+            farm_view.create_image(j * image_width, i * image_height, anchor='nw', image=images[relation[c]])
+        i += 1
+    # 加载角色图像，并设置初始位置
+    image_d = Image.open('images/player_d.png')
+    image_d = image_d.resize((image_width, image_height), Image.LANCZOS)
+    play_img = ImageTk.PhotoImage(image_d)
+    farm_view.create_image(0, farm_view._size[1] // 2, anchor='nw', image=play_img)
+    farm_view.pack()
+    farm_frame.pack(side=tk.LEFT)
+
+    all_item_frame = tk.Frame(root, width=INVENTORY_WIDTH, height=FARM_WIDTH, bg='green', borderwidth=1)
+    all_item_frame.pack(side=tk.RIGHT, fill=tk.BOTH)
+    for i in range(len(ITEMS)):
+        item_frame = tk.Frame(all_item_frame, width=INVENTORY_WIDTH, height=FARM_WIDTH // 6, bg='green', borderwidth=1)
+        item_frame.pack(side=tk.TOP, fill=tk.BOTH)
+        item_view = ItemView(item_frame, ITEMS[i], farm_model.get_player().get_inventory().get(ITEMS[i], 0))
+
+    # item_frame = tk.Frame(root, width=INVENTORY_WIDTH, height=FARM_WIDTH // 6, bg='red')
+    # item_frame.pack(side=tk.BOTTOM)
+    # amount = tk.Label(root, text="item_name" + " :" + str(0), bg='red')
+    # amount.pack()
     # # 运行主循环
     root.mainloop()
-
