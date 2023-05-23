@@ -1,0 +1,231 @@
+import tkinter as tk
+from tkinter import filedialog  # For masters task
+from typing import Callable, Union, Optional
+from a3_support import *
+from model import *
+from constants import *
+
+player_x, player_y = 25, 25
+
+
+# Implement your classes here
+class InfoBar(AbstractGrid):
+    """
+    """
+
+    def __init__(self, master: tk.Tk | tk.Frame) -> None:
+        """Sets up the InfoBar.
+
+        Parameters:
+        master:
+        """
+        super().__init__(
+            master,
+            dimensions=(2, 3),
+            size=(FARM_WIDTH + INVENTORY_WIDTH, INFO_BAR_HEIGHT)
+        )
+
+    def redraw(self, day: int, money: int, energy: int) -> None:
+        """Clears the InfoBar and redraws it to display the provided day,
+        money, and energy.
+
+        Parameters:
+        day:
+
+        money:
+
+        energy:
+        """
+        self.clear()
+        self.annotate_position((0, 0), "Day:", None)
+        self.annotate_position((1, 0), str(day), None)
+        self.annotate_position((0, 1), "Money:", None)
+        self.annotate_position((1, 1), "$" + str(money), None)
+        self.annotate_position((0, 2), "Energy:", None)
+        self.annotate_position((1, 2), str(energy), None)
+
+
+class FarmView(AbstractGrid):
+    """
+    """
+
+    def __init__(self, master: tk.Tk | tk.Frame, dimensions: tuple[int, int],
+                 size: tuple[int, int], **kwargs) -> None:
+        """
+        """
+        super().__init__(master, dimensions=dimensions, size=size)
+        self._cache = {}
+        for value in IMAGES.values():
+            picture_path = f"images/{value}"
+            get_image(picture_path, self.get_cell_size(), self._cache)
+
+    def redraw(self, ground: list[str], plants: dict[tuple[int, int], 'Plant'],
+               player_position: tuple[int, int], player_direction: str) -> None:
+        """
+        """
+        self.clear()
+        # Draw the ground.
+        for i, row in enumerate(ground):
+            for j, col in enumerate(row):
+                p = (i, j)
+                pixel_x, pixel_y = self.get_midpoint(p)
+                if col in ['S', "U", "G"]:
+                    # Get the picture name based on the col value.
+                    picture_name = IMAGES[col]
+                    # Get the picture path using the picture_name.
+                    picture_path = f"images/{picture_name}"
+                    # get_image(picture_path, self.get_cell_size(), self._cache)
+                    image = self._cache.get(picture_path)
+                    self.create_image(pixel_x, pixel_y, image=image)
+        # Draw the plants.
+        for key, value in plants.items():
+            pixel_x1, pixel_y1 = self.get_midpoint(key)
+            plant_image_name = get_plant_image_name(value)
+            plant = Image.open(plant_image_name).resize(self.get_cell_size())
+            plant_img = ImageTk.PhotoImage(plant)
+            self.create_image(pixel_x1, pixel_y1, image=plant_img)
+        # Draw the player.
+        player = self._cache.get("images/player")
+        player = f"images/player_{player_direction}.png"
+        # get_image(picture_name2, self.get_cell_size(), self._cache)
+        image2 = self._cache.get(player)
+        pixel_x2, pixel_y2 = self.get_midpoint(player_position)
+        player_id = self.create_image(pixel_x2, pixel_y2, image=image2)
+        # 定义角色移动速度
+        speed = 50
+
+        # 控制角色移动的函数
+        def move_player(dx, dy):
+            global player_x, player_y
+            player_x_result = player_x + dx * speed
+            player_y_result = player_y + dy * speed
+            player_x = player_x_result if 0 < player_x_result < 500 else player_x
+            player_y = player_y_result if 0 < player_y_result < 500 else player_y
+            if 0 < player_x < 500 and 0 < player_y < 500:
+                self.coords(player_id, player_x, player_y)
+
+        # 配置键盘事件
+        def on_key_press(event):
+            if event.keysym == 'w':
+                move_player(0, -1)
+            elif event.keysym == 's':
+                move_player(0, 1)
+            elif event.keysym == 'a':
+                move_player(-1, 0)
+            elif event.keysym == 'd':
+                move_player(1, 0)
+
+        self.bind('<KeyPress>', on_key_press)
+        self.focus_set()
+
+
+class ItemView(tk.Frame):
+    """A frame displaying relevant information and buttons for a single item."""
+
+    def __init__(self, master: tk.Frame, item_name: str, amount: int,
+                 select_command: Optional[Callable[[str], None]] = None,
+                 sell_command: Optional[Callable[[str], None]] = None,
+                 buy_command: Optional[Callable[[str], None]] = None) -> None:
+        """
+        """
+        super().__init__(master)
+        # 确定 背景色
+        bg_color = INVENTORY_EMPTY_COLOUR if amount == 0 else INVENTORY_COLOUR
+        # 构建label frame
+        label_frame = tk.Frame(self, width=100, height=FARM_WIDTH // 6, bg=bg_color)
+        label_frame.pack_propagate(False)
+        label_frame.pack(side=tk.LEFT)
+        amount = tk.Label(label_frame, text=item_name + " :" + str(amount), bg=bg_color)
+        sell_price = tk.Label(label_frame, text="Sell price : $" + str(SELL_PRICES[item_name]), bg=bg_color)
+        buy_price = tk.Label(label_frame, text="Buy price : $" + str(BUY_PRICES.get(item_name, 'N/A')), bg=bg_color)
+        amount.pack(side=tk.TOP)
+        sell_price.pack(side=tk.TOP)
+        buy_price.pack(side=tk.TOP)
+        # 构建button frame
+        button_frame = tk.Frame(self, width=100, height=FARM_WIDTH // 6, bg=bg_color)
+        button_frame.pack_propagate(False)
+        button_frame.pack(side=tk.LEFT)
+        if str(BUY_PRICES.get(item_name, 'N/A')) != 'N/A':
+            buy_button = tk.Button(button_frame, text="Buy", command=buy_command, bg='white')
+            buy_button.pack(side=tk.LEFT, padx=10)
+        sell_button = tk.Button(button_frame, text="Sell", command=sell_command, bg='white')
+        sell_button.pack(side=tk.LEFT, padx=10)
+        master.bind("<Button1>", select_command)
+
+    def update(self, amount: int, selected: bool = False) -> None:
+        """
+        """
+        label1.configure(text=f"{self.item_name}:{amount}")
+        if amount > 0:
+            self.configure(bg=INVENTORY_COLOUR)
+        else:
+            self.configure(bg=INVENTORY_EMPTY_COLOUR)
+        if selected is True:
+            self.configure(bg=INVENTORY_SELECTED_COLOUR)
+
+
+class FarmGame(object):
+    pass
+
+
+def play_game(root: tk.Tk, map_file: str) -> None:
+    """
+    Create the window.
+
+    Parameters:
+    root:
+
+    map_file:
+    """
+    # game = FarmGame(root, map_file)
+    # root.mainloop()
+
+
+def turn_new_day(farm_model: FarmModel) -> None:
+    return farm_model.new_day()
+
+
+def main() -> None:
+    """
+    Create the window, ensure it displays when the program is run and set its
+    title.
+    """
+    farm_model = FarmModel('maps/map1.txt')
+    farm_model._plants = {(3, 3): PotatoPlant()}
+    # Create the main GUI window.
+    root = tk.Tk()
+    root.title("Farm Game")
+    banner_canvas = tk.Canvas(root, width=FARM_WIDTH + INVENTORY_WIDTH, height=BANNER_HEIGHT)
+    banner_canvas.pack(side=tk.TOP)
+    banner_image = Image.open('images/header.png').resize((FARM_WIDTH + INVENTORY_WIDTH, BANNER_HEIGHT))
+    banner_img = ImageTk.PhotoImage(banner_image)
+    banner_info = banner_canvas.create_image((FARM_WIDTH + INVENTORY_WIDTH) / 2, BANNER_HEIGHT / 2, image=banner_img)
+    # play_game(root,map_file)
+
+    button_frame = tk.Frame(root)
+    button_frame.pack(side=tk.BOTTOM)
+    button = tk.Button(button_frame, text='Next day', command=lambda: turn_new_day(farm_model))
+    button.pack()
+
+    # Create an instance.
+    info_bar = InfoBar(root)
+    info_bar.pack(side=tk.BOTTOM)
+    info_bar.redraw(1, 0, 100)
+
+    # Pack within the GUI.
+    farm_view = FarmView(root, dimensions=farm_model.get_dimensions(), size=(FARM_WIDTH, FARM_WIDTH))
+    farm_view.pack(side=tk.LEFT)
+    farm_view.redraw(farm_model.get_map(), farm_model.get_plants(), (0, 0), DOWN)
+
+    item_list_frame = tk.Frame(root, width=INVENTORY_WIDTH, height=FARM_WIDTH)
+    item_list_frame.pack(side=tk.LEFT, fill=tk.BOTH)
+    for i in range(len(ITEMS)):
+        # 构建item_list
+        item_view = ItemView(item_list_frame, ITEMS[i], farm_model.get_player().get_inventory().get(ITEMS[i], 0))
+        item_view.pack(side=tk.TOP)
+    # Start the main event loop
+    root.mainloop()
+
+
+if __name__ == '__main__':
+    main()
