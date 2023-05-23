@@ -5,10 +5,9 @@ from a3_support import *
 from model import *
 from constants import *
 
-player_x, player_y = 25, 25
-
 
 # Implement your classes here
+player_x, player_y = 25, 25
 class InfoBar(AbstractGrid):
     """
     """
@@ -24,6 +23,9 @@ class InfoBar(AbstractGrid):
             dimensions=(2, 3),
             size=(FARM_WIDTH + INVENTORY_WIDTH, INFO_BAR_HEIGHT)
         )
+        self.annotate_position((0, 0), "Day:", HEADING_FONT)
+        self.annotate_position((0, 1), "Money:", HEADING_FONT)
+        self.annotate_position((0, 2), "Energy:", HEADING_FONT)
 
     def redraw(self, day: int, money: int, energy: int) -> None:
         """Clears the InfoBar and redraws it to display the provided day,
@@ -37,12 +39,12 @@ class InfoBar(AbstractGrid):
         energy:
         """
         self.clear()
-        self.annotate_position((0, 0), "Day:", None)
-        self.annotate_position((1, 0), str(day), None)
-        self.annotate_position((0, 1), "Money:", None)
-        self.annotate_position((1, 1), "$" + str(money), None)
-        self.annotate_position((0, 2), "Energy:", None)
-        self.annotate_position((1, 2), str(energy), None)
+        self.annotate_position((0, 0), "Day:", HEADING_FONT)
+        self.annotate_position((1, 0), str(day), HEADING_FONT)
+        self.annotate_position((0, 1), "Money:", HEADING_FONT)
+        self.annotate_position((1, 1), "$" + str(money), HEADING_FONT)
+        self.annotate_position((0, 2), "Energy:", HEADING_FONT)
+        self.annotate_position((1, 2), str(energy), HEADING_FONT)
 
 
 class FarmView(AbstractGrid):
@@ -54,10 +56,10 @@ class FarmView(AbstractGrid):
         """
         """
         super().__init__(master, dimensions=dimensions, size=size)
-        self._cache = {}
+        self.cache = {}
         for value in IMAGES.values():
             picture_path = f"images/{value}"
-            get_image(picture_path, self.get_cell_size(), self._cache)
+            get_image(picture_path, self.get_cell_size(), self.cache)
 
     def redraw(self, ground: list[str], plants: dict[tuple[int, int], 'Plant'],
                player_position: tuple[int, int], player_direction: str) -> None:
@@ -73,24 +75,21 @@ class FarmView(AbstractGrid):
                     # Get the picture name based on the col value.
                     picture_name = IMAGES[col]
                     # Get the picture path using the picture_name.
-                    picture_path = f"images/{picture_name}"
-                    # get_image(picture_path, self.get_cell_size(), self._cache)
-                    image = self._cache.get(picture_path)
-                    self.create_image(pixel_x, pixel_y, image=image)
+                    ground_picture_name = f"images/{picture_name}"
+                    cell_ground = self.cache.get(ground_picture_name)
+                    self.create_image(pixel_x, pixel_y, image=cell_ground)
         # Draw the plants.
         for key, value in plants.items():
-            pixel_x1, pixel_y1 = self.get_midpoint(key)
-            plant_image_name = get_plant_image_name(value)
+            plant_x, plant_y = self.get_midpoint(key)
+            plant_image_name = f'images/' + get_plant_image_name(value)
             plant = Image.open(plant_image_name).resize(self.get_cell_size())
             plant_img = ImageTk.PhotoImage(plant)
-            self.create_image(pixel_x1, pixel_y1, image=plant_img)
+            self.create_image(plant_x, plant_y, image=plant_img)
         # Draw the player.
-        player = self._cache.get("images/player")
         player = f"images/player_{player_direction}.png"
-        # get_image(picture_name2, self.get_cell_size(), self._cache)
-        image2 = self._cache.get(player)
+        player_img = self.cache.get(player)
         pixel_x2, pixel_y2 = self.get_midpoint(player_position)
-        player_id = self.create_image(pixel_x2, pixel_y2, image=image2)
+        player_id = self.create_image(pixel_x2, pixel_y2, image=player_img)
         # 定义角色移动速度
         speed = 50
 
@@ -114,7 +113,6 @@ class FarmView(AbstractGrid):
                 move_player(-1, 0)
             elif event.keysym == 'd':
                 move_player(1, 0)
-
         self.bind('<KeyPress>', on_key_press)
         self.focus_set()
 
@@ -129,60 +127,194 @@ class ItemView(tk.Frame):
         """
         """
         super().__init__(master)
-        # 确定 背景色
-        bg_color = INVENTORY_EMPTY_COLOUR if amount == 0 else INVENTORY_COLOUR
-        # 构建label frame
-        label_frame = tk.Frame(self, width=100, height=FARM_WIDTH // 6, bg=bg_color)
+        self.item_name = item_name
+        self.amount = amount
+        # Determine the background colour
+        if amount == 0:
+            bg_colour = INVENTORY_EMPTY_COLOUR
+        else:
+            bg_colour = INVENTORY_COLOUR
+        # Build a label frame.
+        label_frame = tk.Frame(self, width=100, height=FARM_WIDTH // 6, bg=bg_colour)
         label_frame.pack_propagate(False)
         label_frame.pack(side=tk.LEFT)
-        amount = tk.Label(label_frame, text=item_name + " :" + str(amount), bg=bg_color)
-        sell_price = tk.Label(label_frame, text="Sell price : $" + str(SELL_PRICES[item_name]), bg=bg_color)
-        buy_price = tk.Label(label_frame, text="Buy price : $" + str(BUY_PRICES.get(item_name, 'N/A')), bg=bg_color)
-        amount.pack(side=tk.TOP)
-        sell_price.pack(side=tk.TOP)
-        buy_price.pack(side=tk.TOP)
-        # 构建button frame
-        button_frame = tk.Frame(self, width=100, height=FARM_WIDTH // 6, bg=bg_color)
+        label1 = tk.Label(label_frame, text=item_name + " :" + str(amount), bg=bg_colour)
+        label1.pack(side=tk.TOP)
+        label2 = tk.Label(label_frame, text="Sell price : $" + str(SELL_PRICES[item_name]), bg=bg_colour)
+        label2.pack(side=tk.TOP)
+        label3 = tk.Label(label_frame, text="Buy price : $" + str(BUY_PRICES.get(item_name, 'N/A')), bg=bg_colour)
+        label3.pack(side=tk.TOP)
+        # Buile a button frame.
+        button_frame = tk.Frame(self, width=100, height=FARM_WIDTH // 6, bg=bg_colour)
         button_frame.pack_propagate(False)
         button_frame.pack(side=tk.LEFT)
         if str(BUY_PRICES.get(item_name, 'N/A')) != 'N/A':
-            buy_button = tk.Button(button_frame, text="Buy", command=buy_command, bg='white')
-            buy_button.pack(side=tk.LEFT, padx=10)
-        sell_button = tk.Button(button_frame, text="Sell", command=sell_command, bg='white')
-        sell_button.pack(side=tk.LEFT, padx=10)
-        master.bind("<Button1>", select_command)
+            button1 = tk.Button(button_frame, text="Buy", command=buy_command, bg="white")
+            button1.pack(side=tk.LEFT, padx=10)
+        button2 = tk.Button(button_frame, text="Sell", command=sell_command, bg="white")
+        button2.pack(side=tk.LEFT, padx=10)
+        master.bind("<Button-1>", select_command)
 
     def update(self, amount: int, selected: bool = False) -> None:
         """
         """
-        label1.configure(text=f"{self.item_name}:{amount}")
+        self.label1.configure(text=f"{self.item_name}:{amount}")
         if amount > 0:
             self.configure(bg=INVENTORY_COLOUR)
         else:
             self.configure(bg=INVENTORY_EMPTY_COLOUR)
-        if selected is True:
+        if selected:
             self.configure(bg=INVENTORY_SELECTED_COLOUR)
 
 
 class FarmGame(object):
-    pass
+    """
+    """
+
+    def __init__(self, master: tk.Tk, map_file: str) -> None:
+        """
+        """
+        # Set the title of the window.
+        master.title("Farm Game")
+        # master.option_add("*Font", HEADING_FONT)
+        farm_model = FarmModel(map_file)
+        # Create the main GUI window.
+        # banner
+        banner_frame = tk.Frame(master)
+        banner_frame.pack(side=tk.TOP, fill=tk.X)
+        cache1 = {}
+        picture_title = f"images/header.png"
+        get_image(
+            picture_title,
+            size=(FARM_WIDTH + INVENTORY_WIDTH, BANNER_HEIGHT),
+            cache=cache1
+        )
+        label4 = tk.Label(banner_frame, image=cache1.get(picture_title))
+        label4.pack()
+        # next_day button
+        button_frame = tk.Frame(master)
+        button_frame.pack(side=tk.BOTTOM)
+        button = tk.Button(button_frame, text='Next day', command=lambda: turn_new_day(farm_model, info_bar))
+        button.pack()
+
+        # Create an instance.
+        info_bar = InfoBar(master)
+        info_bar.pack(side=tk.BOTTOM)
+        info_bar.redraw(1, 0, 100)
+
+        # Pack within the GUI.
+        farm_view = FarmView(master, dimensions=farm_model.get_dimensions(), size=(FARM_WIDTH, FARM_WIDTH))
+        farm_view.pack(side=tk.LEFT)
+        farm_view.redraw(farm_model.get_map(), farm_model.get_plants(), farm_model.get_player().get_position(),
+                         farm_model.get_player().get_direction())
+
+        item_list_frame = tk.Frame(master, width=INVENTORY_WIDTH, height=FARM_WIDTH)
+        item_list_frame.pack(side=tk.LEFT, fill=tk.BOTH)
+        for i in range(len(ITEMS)):
+            # 构建item_list
+            item_view = ItemView(item_list_frame, ITEMS[i], farm_model.get_player().get_inventory().get(ITEMS[i], 0))
+            item_view.pack(side=tk.TOP)
+        master.mainloop()
+
+        # # Set the title of the window.
+        # master.title("Farm Game")
+        # master.option_add("*Font", HEADING_FONT)
+        # # Create the title banner.
+        # banner_frame = tk.Frame(master)
+        # banner_frame.pack(side=tk.TOP, fill=tk.X)
+        # cache1 = {}
+        # picture_title = f"images/header.png"
+        # get_image(
+        #     picture_title,
+        #     size=(FARM_WIDTH + INVENTORY_WIDTH, BANNER_HEIGHT),
+        #     cache=cache1
+        # )
+        # label4 = tk.Label(banner_frame, image=cache1.get(picture_title))
+        # label4.pack()
+        # # Create the FarmModel instance.
+        # self.model = FarmModel(map_file)
+        # self.player = self.model.get_player()
+        # self.inventory = self.player.get_inventory()
+        # dimensions1 = self.model.get_dimensions()
+        # frame1 = tk.Frame(master)
+        # frame1.pack()
+        # self.fv = FarmView(frame1, dimensions=dimensions1,
+        #                    size=(FARM_WIDTH, FARM_WIDTH))
+        # self.fv.pack(side=tk.TOP)
+        # iv1 = ItemView("Potato Seed", self.inventory['Potato Seed'], None, None, None)
+        # iv1.pack()
+        # iv2 = ItemView("Kale Seed", self.inventory['Kale Seed'], None, None, None)
+        # iv2.pack()
+        # iv3 = ItemView("Berry Seed", self.inventory['Berry Seed'], None, None, None)
+        # iv3.pack()
+        # iv4 = ItemView("Potato", self.inventory['Potato'], None, None, None)
+        # iv4.pack()
+        # iv5 = ItemView("Kale", self.inventory['Kale'], None, None, None)
+        # iv5.pack()
+        # iv6 = ItemView("Berry", self.inventory['Berry'], None, None, None)
+        # iv6.pack()
+        # # Create the instances of view classes.
+        # # Create the InfoBar instance.
+        # info_bar = InfoBar(master)
+        # info_bar.pack(side=tk.BOTTOM)
+        # info_bar.redraw(1, 0, 100)
+        # # Create a button to enable users to increment the day.
+        # self.button = tk.Button(master, text="Next day", command=self.model.new_day)
+        # self.button.pack()
+        # # Bind the handle_keypress method.
+        # master.bind('<KeyPress>', self.handle_keypress)
+        # # Call the redraw method to ensure the view draws according to the current model state.
+        # InfoBar.redraw(
+        #     day=self.model.get_days_elapsed(),
+        #     money=self.player.get_money(), energy=self.player.get_energy())
+        # self.fv.redraw = (
+        #     ground = self.model.get_map(),
+        # plants = self.model.get_plants(),
+        # player_position = self.model.get_player_position(),
+        # player_direction = self.model.get_player_direction())
+
+        def redraw(self) -> None:
+            """
+            """
+            pass
+
+        def handle_keypress(self, event: tk.Event) -> None:
+            """
+            """
+            pass
+
+        def select_item(self, item_name: str) -> None:
+            """
+            """
+            pass
+
+        def buy_item(self, item_name: str) -> None:
+            """
+            """
+            pass
+
+        def sell_item(self, item_name: str) -> None:
+            """
+            """
+            pass
+
+
+def turn_new_day(farm_model, info_bar):
+    farm_model.new_day()
+    info_bar.redraw(farm_model.get_days_elapsed(), farm_model.get_player().get_money(),
+                    farm_model.get_player().get_energy())
 
 
 def play_game(root: tk.Tk, map_file: str) -> None:
-    """
-    Create the window.
+        """
+        Create the window.
 
-    Parameters:
-    root:
+        Parameters:
+        root:
 
-    map_file:
-    """
-    # game = FarmGame(root, map_file)
-    # root.mainloop()
-
-
-def turn_new_day(farm_model: FarmModel) -> None:
-    return farm_model.new_day()
+        map_file:
+        """
+        game = FarmGame(root, map_file)
 
 
 def main() -> None:
@@ -190,41 +322,10 @@ def main() -> None:
     Create the window, ensure it displays when the program is run and set its
     title.
     """
-    farm_model = FarmModel('maps/map1.txt')
-    farm_model._plants = {(3, 3): PotatoPlant()}
     # Create the main GUI window.
     root = tk.Tk()
-    root.title("Farm Game")
-    banner_canvas = tk.Canvas(root, width=FARM_WIDTH + INVENTORY_WIDTH, height=BANNER_HEIGHT)
-    banner_canvas.pack(side=tk.TOP)
-    banner_image = Image.open('images/header.png').resize((FARM_WIDTH + INVENTORY_WIDTH, BANNER_HEIGHT))
-    banner_img = ImageTk.PhotoImage(banner_image)
-    banner_info = banner_canvas.create_image((FARM_WIDTH + INVENTORY_WIDTH) / 2, BANNER_HEIGHT / 2, image=banner_img)
-    # play_game(root,map_file)
-
-    button_frame = tk.Frame(root)
-    button_frame.pack(side=tk.BOTTOM)
-    button = tk.Button(button_frame, text='Next day', command=lambda: turn_new_day(farm_model))
-    button.pack()
-
-    # Create an instance.
-    info_bar = InfoBar(root)
-    info_bar.pack(side=tk.BOTTOM)
-    info_bar.redraw(1, 0, 100)
-
-    # Pack within the GUI.
-    farm_view = FarmView(root, dimensions=farm_model.get_dimensions(), size=(FARM_WIDTH, FARM_WIDTH))
-    farm_view.pack(side=tk.LEFT)
-    farm_view.redraw(farm_model.get_map(), farm_model.get_plants(), (0, 0), DOWN)
-
-    item_list_frame = tk.Frame(root, width=INVENTORY_WIDTH, height=FARM_WIDTH)
-    item_list_frame.pack(side=tk.LEFT, fill=tk.BOTH)
-    for i in range(len(ITEMS)):
-        # 构建item_list
-        item_view = ItemView(item_list_frame, ITEMS[i], farm_model.get_player().get_inventory().get(ITEMS[i], 0))
-        item_view.pack(side=tk.TOP)
-    # Start the main event loop
-    root.mainloop()
+    map_file = 'maps/map1.txt'
+    FarmGame(root, map_file)
 
 
 if __name__ == '__main__':
